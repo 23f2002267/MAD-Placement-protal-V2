@@ -47,6 +47,8 @@ class PlacementDrive(db.Model):
     company_id = db.Column(db.Integer, db.ForeignKey('company_profile.id'), ondelete='SET NULL')
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
+    salary = db.Column(db.Float, CheckConstraint('salary >= 0.0'), nullable=False)
+    skills_required = db.Column(db.String(255))
     min_cgpa = db.Column(db.Float, CheckConstraint('min_cgpa >= 0.0 AND min_cgpa <= 10.0'), default=0.0)
     start_date = db.Column(db.DateTime, nullable=False)
     deadline = db.Column(db.DateTime, nullable=False)
@@ -62,3 +64,12 @@ class Application(db.Model):
     date_applied = db.Column(db.DateTime, server_default=text('CURRENT_TIMESTAMP'))
     status = db.Column(db.String(20), CheckConstraint("status IN ('Applied', 'Shortlisted', 'Selected', 'Rejected')"), default='Applied')
     drive = db.relationship('PlacementDrive', backref='applications')
+
+class PlacementResult(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('student_profile.id'))
+    company_id = db.Column(db.Integer, db.ForeignKey('company_profile.id'))
+    salary = db.Column(db.Float, CheckConstraint('salary >= 0.0'), nullable=False)
+    joining_date = db.Column(db.DateTime, nullable=False)
+    student = db.relationship('StudentProfile', backref='placement_results')
+    company = db.relationship('CompanyProfile', backref='placement_results')

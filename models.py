@@ -1,0 +1,64 @@
+from flask_sqlalchemy import SQLAlchemy
+from flask_security import UserMixin, RoleMixin
+from werkzeug.security import check_password_hash
+from sqlalchemy import CheckConstraint, text
+
+db = SQLAlchemy()
+
+user_role = db.Table(
+    'user_role',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
+    db.Column('role_id', db.Integer, db.ForeignKey('role.id'))
+)
+
+class Role(db.Model, RoleMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), unique=True, nullable=False)
+
+class User(db.Model, UserMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+    active = db.Column(db.Boolean())
+    roles = db.relationship('Role', secondary=user_role, backref=db.backref('users', lazy='dynamic'))
+    blacklist = db.Column(db.Boolean, default=False) # For Admin to blacklist users
+    student_profile = db.relationship('StudentProfile', backref='user', uselist=False, cascade="all, delete-orphan")
+    company_profile = db.relationship('CompanyProfile', backref='user', uselist=False, cascade="all, delete-orphan")
+
+class CompanyProfile(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    name = db.Column(db.String(100), nullable=False)
+    website = db.Column(db.String(100))
+    is_approved = db.Column(db.Boolean, default=False)
+    placement_drives = db.relationship('PlacementDrive', backref='company', lazy=True, cascade="all, delete-orphan")
+
+class StudentProfile(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    name = db.Column(db.String(100), nullable=False)
+    branch_cgpa = db.Column(db.JSON, nullable=False) # {"branch": cgpa}
+    resume = db.Column(db.String(255)) # Path to file
+    applications = db.relationship('Application', backref='student', lazy=True)
+
+class PlacementDrive(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey('company_profile.id'), ondelete='SET NULL')
+    title = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    min_cgpa = db.Column(db.Float, CheckConstraint('min_cgpa >= 0.0 AND min_cgpa <= 10.0'), default=0.0)
+    start_date = db.Column(db.DateTime, nullable=False)
+    deadline = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.String(20), CheckConstraint("status IN ('Pending', 'Approved', 'Closed')"), default='Pending')
+    is_approved = db.Column(db.Boolean, default=False)
+    company_profile = db.relationship('CompanyProfile', backref='placement')
+    applications = db.relationship('Application', backref='placement', lazy=True)
+
+class Application(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    drive_id = db.Column(db.Integer, db.ForeignKey('placement_drive.id'))
+    student_id = db.Column(db.Integer, db.ForeignKey('student_profile.id'), ondelete='SET NULL')
+    date_applied = db.Column(db.DateTime, server_default=text('CURRENT_TIMESTAMP'))
+    status = db.Column(db.String(20), CheckConstraint("status IN ('Applied', 'Shortlisted', 'Selected', 'Rejected')"), default='Applied')
+    drive = db.relationship('PlacementDrive', backref='applications')

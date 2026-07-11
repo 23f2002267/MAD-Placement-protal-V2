@@ -98,6 +98,17 @@
                         </ul>
                     </div>
                 </div>
+                <div class="col-md-6">
+                    <div class="card p-3">
+                        <h5>Pending Drives</h5>
+                        <ul class="list-group">
+                            <li v-for="d in pendingDrives" class="list-group-item d-flex justify-content-between">
+                                Company: {{ d.company }} | Title: {{ d.title }}
+                                <button class="btn btn-sm btn-success" @click="approveDrive(d.id)">Approve</button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -139,7 +150,8 @@
         </div>
 
     </div><!-- container end -->
-
+    <!-- newDrive: { company_id: this.user?.id, title: '', desc: '', salary: 0,
+                 skills_required: '', min_cgpa: 0, start_date: '', deadline: '', status: ''}, -->
     <!-- MODAL -->
     <div class="modal fade" id="driveModal" tabindex="-1">
         <div class="modal-dialog">
@@ -147,7 +159,12 @@
                 <div class="modal-header"><h5>Create Drive</h5></div>
                 <div class="modal-body">
                     <input v-model="newDrive.title" class="form-control mb-2" placeholder="Title">
-                    <input v-model="newDrive.cgpa" type="number" class="form-control mb-2" placeholder="Min CGPA">
+                    <input v-model="newDrive.desc" class="form-control mb-2" placeholder="Description">
+                    <input v-model="newDrive.salary" type="number" class="form-control mb-2" placeholder="Salary">
+                    <input v-model="newDrive.skills_required" class="form-control mb-2" placeholder="Skills Required">
+                    <input v-model="newDrive.min_cgpa" type="number" class="form-control mb-2" placeholder="Min CGPA">
+                    <input v-model="newDrive.start_date" type="date" class="form-control mb-2" placeholder="Start Date">
+                    <input v-model="newDrive.deadline" type="date" class="form-control mb-2" placeholder="Deadline">
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-success" @click="saveDrive" data-bs-dismiss="modal">Create</button>

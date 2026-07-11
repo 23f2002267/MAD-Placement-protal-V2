@@ -7,3 +7,4 @@ flask_caching
 celery
 redis
 flask_cors
+argon2-cffi

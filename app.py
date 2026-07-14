@@ -8,9 +8,9 @@ from workers import celery_init_app
 import tasks
 from flask_cors import CORS
 from datetime import datetime, timedelta
+from sqlalchemy import text
 
-
-app = Flask(__name__)
+app = Flask(__name__, template_folder='vuefrontend', static_folder='vuefrontend', static_url_path='')
 
 # --- CONFIGURATION ---
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///placeportal.db'
@@ -105,6 +105,24 @@ def register():
         except Exception as e:
             db.session.rollback()
             return jsonify({"message": "Error registering user", "error": str(e)}), 500
+# SEARCH FUNCTIONALITY
+
+@app.route('/api/search')
+def search():
+    q = request.args.get('query', '')
+    if not q:
+        return jsonify([])
+
+    results = []
+    for table in ['fts_user', 'fts_company_profile', 'fts_student_profile', 'fts_placement_drive',
+                  'fts_placement_result','fts_application']:
+        sql = f"SELECT rowid, * FROM {table} WHERE {table} MATCH :q"
+        rows = db.session.execute(text(sql), {'q': q}).mappings().all()
+        for r in rows:
+            results.append(dict(r))
+
+    return jsonify(results)
+
 
 # ADMIN ENDPOINTS
 @app.route('/api/admin/stats')
@@ -114,14 +132,59 @@ def register():
 def get_stats():
     return jsonify({
         "students": StudentProfile.query.count(),
-        "companies": CompanyProfile.query.count(),
-        "drives": PlacementDrive.query.count()
+        "companies": CompanyProfile.query.filter_by(status='Approved').count(),
+        "drives": PlacementDrive.query.filter_by(status='Approved').count(),
+        "applications": Application.query.filter_by(status='Applied').count()
     })
+
+@app.route('/api/admin/search')
+@auth_required('session')
+@roles_accepted('Admin')
+@cache.cached(timeout=60) # Caching Requirement
+def get_users():
+    entries = User.query.all()
+    return jsonify([{"id": s.id, "username": s.username, "email":s.email,
+                     "role": s.roles[0].name if s.roles else None, "blacklist": s.blacklist} for s in entries])
+
+@app.route('/api/admin/drive')
+@auth_required('session')
+@roles_accepted('Admin')
+@cache.cached(timeout=60) # Caching Requirement
+def get_drive():
+    pd_entries = PlacementDrive.query.all()
+    return jsonify([{
+        "id": d.id,
+        "company_id": d.company_id,
+        "title": d.title,
+        "description": d.description,
+        "company": d.company_profile.name,
+        "salary": d.salary,
+        "skills_required": d.skills_required,
+        "start_date": d.start_date.isoformat(),
+        "deadline": d.deadline.isoformat(),
+        "min_cgpa": d.min_cgpa,
+        "status": d.status
+    } for d in pd_entries])
+
+@app.route('/api/admin/application')
+@auth_required('session')
+@roles_accepted('Admin')
+@cache.cached(timeout=60) # Caching Requirement
+def get_applications():
+    ap_entries = Application.query.all()
+    return jsonify([{
+        "id": d.id,
+        "drive_id": d.drive_id,
+        "student_id": d.student_id,
+        "date_applied": d.date_applied,
+        "status": d.status } for d in ap_entries])
+
+
 @app.route('/api/admin/pending-companies')
 @auth_required('session')
 @roles_accepted('Admin')
 def pending_companies():
-    companies = CompanyProfile.query.filter_by(is_approved=False).all()
+    companies = CompanyProfile.query.filter_by(status='Pending').all()
     return jsonify([{"id": c.id, "name": c.name} for c in companies])
 
 @app.route('/api/admin/pending-drives')
@@ -137,7 +200,7 @@ def pending_drives():
 @roles_accepted('Admin')
 def approve_company(id):
     comp = CompanyProfile.query.get(id)
-    comp.is_approved = True
+    comp.status = 'Approved'
     db.session.commit()
     cache.clear() # Clear stats cache
     return jsonify({"message": "Company Approved"})
@@ -152,15 +215,80 @@ def approve_drive(id):
     cache.clear() # Clear stats cache
     return jsonify({"message": "Drive Approved"})
 
+@app.route('/api/admin/reject-company/<int:id>', methods=['POST'])
+@auth_required('session')
+@roles_accepted('Admin')
+def reject_company(id):
+    comp = CompanyProfile.query.get(id)
+    comp.status = 'Rejected'
+    db.session.commit()
+    cache.clear() # Clear stats cache
+    return jsonify({"message": "Company Rejected"})
+
+@app.route('/api/admin/reject-drive/<int:id>', methods=['POST'])
+@auth_required('session')
+@roles_accepted('Admin')
+def reject_drive(id):
+    drive = PlacementDrive.query.get(id)
+    drive.status = 'Rejected'
+    db.session.commit()
+    cache.clear() # Clear stats cache
+    return jsonify({"message": "Drive rejected"})
+
+@app.route('/api/admin/blacklist-user/<int:id>', methods=['POST'])
+@auth_required('session')
+@roles_accepted('Admin')
+def blacklist_user(id):
+    user = User.query.get(id)
+    user.blacklist = not user.blacklist
+    db.session.commit()
+    cache.clear() # Clear stats cache
+    return jsonify({"message": "Student blacklisted"})
+
+@app.route('/api/admin/delete-user/<int:id>', methods=['POST'])
+@auth_required('session')
+@roles_accepted('Admin')                                                            
+def delete_user(id):
+    entry = User.query.filter_by(id=id).first()
+    if entry:
+        db.session.delete(entry)
+        db.session.commit()
+    return jsonify({"message": "User deleted"})
+
+@app.route('/api/admin/delete-company/<int:id>', methods=['POST'])
+@auth_required('session')
+@roles_accepted('Admin')                                                            
+def delete_company(id):
+    entry = User.query.filter_by(id=id).first()
+    if entry:
+        db.session.delete(entry)
+        db.session.commit()
+        return jsonify({"message": "Company deleted"})
+    else :
+        return jsonify({'message': "Entry not Found"})
+
 # COMPANY ENDPOINTS
+@app.route('/api/company/drives/<int:id>', methods=['GET'])
+@auth_required('session')
+@roles_accepted('Company')
+def Drives(id):
+    entry = CompanyProfile.query.filter_by(user_id=id).first()
+    entries = entry.placement_drives
+    if entry:
+        return jsonify([{"id":e.id,"title":e.title,"desc":e.description,"salary":e.salary,
+                         "status":e.status,"start_date":e.start_date.isoformat() if e.start_date else None,
+                         "deadline":e.deadline.isoformat() if e.deadline else None,} for e in entries])
+    else :
+        return jsonify({'error': "Entry not Found"}), 404
+
 @app.route('/api/company/create-drive', methods=['POST'])
 @auth_required('session')
 @roles_accepted('Company')
 def create_drive():
     data = request.json
     company = CompanyProfile.query.filter_by(user_id=current_user.id).first()
-    print(f"Company: {company}, Approved: {company.is_approved if company else 'N/A'}")  # Debugging line
-    if not company or not company.is_approved:
+    print(f"Company: {company}, Approved: {company.status if company else 'N/A'}")  # Debugging line
+    if not company or not(company.status == 'Approved'):
         return jsonify({"message": "Company not approved by Admin"}), 403
     
     try:
@@ -189,8 +317,10 @@ def create_drive():
 def get_student_drives():
     drives = PlacementDrive.query.filter_by(status='Approved').all()
     return jsonify([{
-        "id": d.id, "title": d.title, "company": d.company.name, 
-        "min_cgpa": d.min_cgpa, "description": d.description
+        "id": d.id, "company_id": d.company_id, "title": d.title, "description": d.description,
+        "company": d.company_profile.name, "salary": d.salary, "skills_required": d.skills_required,
+        "start_date": d.start_date.isoformat(), "deadline": d.deadline.isoformat(),
+        "min_cgpa": d.min_cgpa
     } for d in drives])
 
 @app.route('/api/student/apply', methods=['POST'])
@@ -198,17 +328,16 @@ def get_student_drives():
 @roles_accepted('Student')
 def apply():
     data = request.json
-    # Logic to check eligibility
-    student = StudentProfile.query.filter_by(user_id=data['user_id']).first()
-    drive = PlacementDrive.query.get(data['drive_id'])
-    
-    if student.cgpa < drive.min_cgpa:
-        return jsonify({"message": "Ineligible: CGPA too low"}), 400
-    
-    new_app = Application(student_id=student.id, drive_id=drive.id)
-    db.session.add(new_app)
-    db.session.commit()
-    return jsonify({"message": "Application Successful"})
+    try:
+        student = StudentProfile.query.filter_by(user_id=data['user_id']).first()
+        drive = PlacementDrive.query.get(data['drive_id'])    
+        new_app = Application(student_id=student.id, drive_id=drive.id)
+        db.session.add(new_app)
+        db.session.commit()
+        return jsonify({"message": "Application Successful"}), 201
+    except:
+        db.session.rollback()
+        return jsonify({"error": "Entry already exists"}), 400
 
 @app.route('/api/student/export-csv/<int:user_id>')
 def trigger_export(user_id):
@@ -239,12 +368,6 @@ def create_admin():
             )
             db.session.add(admin)
             db.session.commit()
-
-with app.app_context():
-    admin_role = Role.query.filter_by(name='Admin').first()
-    print(admin_role)  # should not be None
-    admin_user = User.query.filter(User.roles.contains(admin_role)).first()
-    print(admin_user)  # should be your admin user
 
 if __name__ == '__main__':
     create_admin()

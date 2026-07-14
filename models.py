@@ -32,7 +32,7 @@ class CompanyProfile(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     name = db.Column(db.String(100), nullable=False)
     website = db.Column(db.String(100))
-    is_approved = db.Column(db.Boolean, default=False)
+    status = db.Column(db.String(20), CheckConstraint("status IN ('Pending', 'Approved', 'Rejected')"), default='Pending')
     placement_drives = db.relationship('PlacementDrive', back_populates='company_profile', lazy=True, cascade="all, delete-orphan")
 
 class StudentProfile(db.Model):
@@ -53,7 +53,7 @@ class PlacementDrive(db.Model):
     min_cgpa = db.Column(db.Float, CheckConstraint('min_cgpa >= 0.0 AND min_cgpa <= 10.0'), default=0.0)
     start_date = db.Column(db.DateTime, nullable=False)
     deadline = db.Column(db.DateTime, nullable=False)
-    status = db.Column(db.String(20), CheckConstraint("status IN ('Pending', 'Approved', 'Closed')"), default='Pending')
+    status = db.Column(db.String(20), CheckConstraint("status IN ('Pending', 'Approved', 'Closed', 'Rejected')"), default='Pending')
     is_approved = db.Column(db.Boolean, default=False)
     company_profile = db.relationship('CompanyProfile', back_populates='placement_drives')
     applications = db.relationship('Application', back_populates='drive', lazy=True)
@@ -65,6 +65,10 @@ class Application(db.Model):
     date_applied = db.Column(db.DateTime, server_default=text('CURRENT_TIMESTAMP'))
     status = db.Column(db.String(20), CheckConstraint("status IN ('Applied', 'Shortlisted', 'Selected', 'Rejected')"), default='Applied')
     drive = db.relationship('PlacementDrive', back_populates='applications')
+
+    __table_args__ = (
+        db.UniqueConstraint('drive_id', 'student_id', name='drive_student_id'),
+    )
 
 class PlacementResult(db.Model):
     id = db.Column(db.Integer, primary_key=True)

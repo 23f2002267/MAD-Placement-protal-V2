@@ -41,6 +41,9 @@ class StudentProfile(db.Model):
     name = db.Column(db.String(100), nullable=False)
     branch_cgpa = db.Column(db.JSON, nullable=False) # {"branch": cgpa}
     resume = db.Column(db.String(255)) # Path to file
+    education = db.Column(db.Text, nullable=True)
+    skills = db.Column(db.Text, nullable=True)
+    experience = db.Column(db.Text, nullable=True)
     applications = db.relationship('Application', backref='student', lazy=True)
 
 class PlacementDrive(db.Model):
@@ -67,6 +70,7 @@ class Application(db.Model):
     feedback = db.Column(db.Text, nullable=True)
     interview_time = db.Column(db.String(255), nullable=True)
     interview_link = db.Column(db.String(255), nullable=True)
+    offer_letter_link = db.Column(db.String(512), nullable=True)
     drive = db.relationship('PlacementDrive', back_populates='applications')
 
     __table_args__ = (

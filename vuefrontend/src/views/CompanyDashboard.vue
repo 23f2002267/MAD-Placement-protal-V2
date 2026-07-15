@@ -37,14 +37,14 @@ watch(() => props.profile, (newProfile) => {
 }, { immediate: true });
 
 // Computed Statistics
-const totalDrives = computed(() => props.drives?.length || 0);
-const totalApps = computed(() => props.applications?.length || 0);
-const shortlistedCount = computed(() => props.applications?.filter(a => a.status === 'Shortlisted').length || 0);
-const selectedCount = computed(() => props.applications?.filter(a => a.status === 'Selected').length || 0);
+const totalDrives = computed(() => Array.isArray(props.drives) ? props.drives.length : 0);
+const totalApps = computed(() => Array.isArray(props.applications) ? props.applications.length : 0);
+const shortlistedCount = computed(() => Array.isArray(props.applications) ? props.applications.filter(a => a.status === 'Shortlisted').length : 0);
+const selectedCount = computed(() => Array.isArray(props.applications) ? props.applications.filter(a => a.status === 'Selected').length : 0);
 
 // Filter lists
-const pendingApps = computed(() => props.applications?.filter(a => a.status === 'Applied') || []);
-const shortlistedApps = computed(() => props.applications?.filter(a => a.status === 'Shortlisted' || a.status === 'Selected') || []);
+const pendingApps = computed(() => Array.isArray(props.applications) ? props.applications.filter(a => a.status === 'Applied') : []);
+const shortlistedApps = computed(() => Array.isArray(props.applications) ? props.applications.filter(a => a.status === 'Shortlisted' || a.status === 'Selected') : []);
 
 function formatDate(dateStr) {
   if (!dateStr) return 'N/A';
@@ -60,6 +60,7 @@ const reviewStatus = ref('');
 const reviewFeedback = ref('');
 const reviewInterviewTime = ref('');
 const reviewInterviewLink = ref('');
+const reviewOfferLetterLink = ref('');
 
 function openReviewModal(app, status) {
   activeAppToReview.value = app;
@@ -67,6 +68,7 @@ function openReviewModal(app, status) {
   reviewFeedback.value = app.feedback || '';
   reviewInterviewTime.value = app.interview_time || '';
   reviewInterviewLink.value = app.interview_link || '';
+  reviewOfferLetterLink.value = app.offer_letter_link || '';
 }
 
 function closeReviewModal() {
@@ -81,7 +83,8 @@ function submitReview() {
     status: reviewStatus.value, 
     feedback: reviewFeedback.value,
     interview_time: reviewStatus.value === 'Shortlisted' ? reviewInterviewTime.value : '',
-    interview_link: reviewStatus.value === 'Shortlisted' ? reviewInterviewLink.value : ''
+    interview_link: reviewStatus.value === 'Shortlisted' ? reviewInterviewLink.value : '',
+    offer_letter_link: reviewStatus.value === 'Selected' ? reviewOfferLetterLink.value : ''
   });
   
   closeReviewModal();
@@ -574,6 +577,45 @@ function toggleDriveStatus(driveId, currentStatus) {
             Applying for: <strong class="text-dark">{{ activeAppToReview.drive_title }}</strong>
           </p>
 
+          <!-- Candidate Information Section -->
+          <div class="bg-light p-3 rounded-4 mb-3 border border-light-subtle">
+            <h6 class="fw-bold text-dark mb-2">👤 Candidate Profile</h6>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <span class="text-muted small d-block">Academic Details:</span>
+                <span class="fw-semibold text-dark small" v-if="activeAppToReview.branch_cgpa && Object.keys(activeAppToReview.branch_cgpa).length > 0">
+                  {{ Object.keys(activeAppToReview.branch_cgpa)[0] }} (CGPA: {{ Object.values(activeAppToReview.branch_cgpa)[0] }})
+                </span>
+                <span class="text-muted small italic" v-else>No branch / CGPA details</span>
+              </div>
+              <div class="col-6" v-if="activeAppToReview.resume">
+                <span class="text-muted small d-block">Resume:</span>
+                <a :href="activeAppToReview.resume" target="_blank" class="fw-semibold text-decoration-underline text-primary small">
+                  📄 View Resume
+                </a>
+              </div>
+            </div>
+
+            <div class="mb-2" v-if="activeAppToReview.education">
+              <span class="text-muted small d-block">Education:</span>
+              <div class="text-dark small" style="white-space: pre-wrap;">{{ activeAppToReview.education }}</div>
+            </div>
+
+            <div class="mb-2" v-if="activeAppToReview.experience">
+              <span class="text-muted small d-block">Experience:</span>
+              <div class="text-dark small" style="white-space: pre-wrap;">{{ activeAppToReview.experience }}</div>
+            </div>
+
+            <div v-if="activeAppToReview.skills">
+              <span class="text-muted small d-block">Skills:</span>
+              <div class="d-flex flex-wrap gap-1 mt-1">
+                <span v-for="skill in activeAppToReview.skills.split(',')" :key="skill" class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill" style="font-size: 0.75rem;">
+                  {{ skill.trim() }}
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div class="mb-3">
             <label class="form-label small fw-bold text-muted text-uppercase">Decision Status</label>
             <select v-model="reviewStatus" class="form-select rounded-3">
@@ -597,6 +639,17 @@ function toggleDriveStatus(driveId, currentStatus) {
               <label class="form-label small fw-bold text-muted text-uppercase">Interview Link / URL</label>
               <input v-model="reviewInterviewLink" type="url" class="form-control rounded-3" placeholder="e.g. https://meet.google.com/abc-defg-hij">
               <span class="text-muted" style="font-size: 0.75rem;">Google Meet, Zoom, or Teams link.</span>
+            </div>
+          </div>
+
+          <!-- Conditional Offer Letter Fields -->
+          <div v-if="reviewStatus === 'Selected'" class="p-3 bg-light rounded-4 mb-3 border border-success-subtle">
+            <h6 class="fw-bold text-success mb-3">📄 Offer Letter Details</h6>
+            
+            <div class="mb-1">
+              <label class="form-label small fw-bold text-muted text-uppercase">Offer Letter Link / URL</label>
+              <input v-model="reviewOfferLetterLink" type="url" class="form-control rounded-3" required placeholder="e.g. https://drive.google.com/file/d/.../view">
+              <span class="text-muted" style="font-size: 0.75rem;">Provide a public, shareable link to the PDF offer letter.</span>
             </div>
           </div>
 

@@ -47,6 +47,32 @@ function handleCardTap(card) {
   }
 }
 
+const studentsList = computed(() => {
+  if (!Array.isArray(props.userSearch)) return [];
+  return props.userSearch.filter(u => u.role === 'Student');
+});
+
+const companiesList = computed(() => {
+  if (!Array.isArray(props.userSearch)) return [];
+  return props.userSearch.filter(u => u.role === 'Company');
+});
+
+const drivesList = computed(() => {
+  return Array.isArray(props.drives) ? props.drives : [];
+});
+
+const applicationsList = computed(() => {
+  return Array.isArray(props.applications) ? props.applications : [];
+});
+
+const pendingCompaniesList = computed(() => {
+  return Array.isArray(props.pendingCompanies) ? props.pendingCompanies : [];
+});
+
+const pendingDrivesList = computed(() => {
+  return Array.isArray(props.pendingDrives) ? props.pendingDrives : [];
+});
+
 // function onViewDetails(item) {
 //   emit('view-details', item);
 // }
@@ -73,7 +99,7 @@ function handleCardTap(card) {
           <div class="card p-3">
             <h5>Pending Companies</h5>
             <ul class="list-group list-scroll">
-              <li v-for="c in pendingCompanies" :key="c.id" class="list-group-item d-flex justify-content-between align-items-center">
+              <li v-for="c in pendingCompaniesList" :key="c.id" class="list-group-item d-flex justify-content-between align-items-center">
                 {{ c.name }}
                 <div class="justify-content-between">
                   <button class="btn btn-sm btn-success me-2" @click="$emit('approve-company', c.id)">Approve</button>
@@ -87,7 +113,7 @@ function handleCardTap(card) {
           <div class="card p-3">
             <h5>Pending Drives</h5>
             <ul class="list-group list-scroll">
-              <li v-for="d in pendingDrives" :key="d.id" class="list-group-item d-flex justify-content-between align-items-center">
+              <li v-for="d in pendingDrivesList" :key="d.id" class="list-group-item d-flex justify-content-between align-items-center">
                 {{ d.company }} | {{ d.title }}
                 <div>
                   <button class="btn btn-sm btn-success me-2" @click="$emit('approve-drive', d.id)">Approve</button>
@@ -104,7 +130,7 @@ function handleCardTap(card) {
 
     <template v-else-if="props.currentBtn === 'Students'">
       <AdminList
-        :items="props.userSearch.filter(u => u.role === 'Student')"
+        :items="studentsList"
         title="Students"
         item-key="id"
         :search-fields="['username', 'email', 'role']"
@@ -125,7 +151,7 @@ function handleCardTap(card) {
 
     <template v-else-if="props.currentBtn === 'Companies'">
       <AdminList
-        :items="props.userSearch.filter(u => u.role === 'Company')"
+        :items="companiesList"
         title="Companies"
         item-key="id"
         :search-fields="['username', 'email', 'role']"
@@ -146,7 +172,7 @@ function handleCardTap(card) {
 
     <template v-else-if="props.currentBtn === 'Drives'">
       <AdminList
-        :items="props.drives"
+        :items="drivesList"
         title="Drives"
         item-key="id"
         :search-fields="['title', 'company', 'skills_required','status']"
@@ -160,8 +186,8 @@ function handleCardTap(card) {
            @click="$emit('approve-drive', item.id)"
            :disabled="item.status === 'Approved' || item.status === 'Closed'">Approve</button>
           <button class="btn btn-sm btn-danger" 
-          @click="$emit('reject-drive', item.id)"
-          :disabled="item.status === 'Rejected' || item.status === 'Closed'">Reject</button>
+           @click="$emit('reject-drive', item.id)"
+           :disabled="item.status === 'Rejected' || item.status === 'Closed'">Reject</button>
         </template>
       </AdminList>
     </template>
@@ -170,7 +196,7 @@ function handleCardTap(card) {
 
     <template v-else-if="props.currentBtn === 'Applications'">
       <AdminList
-        :items="props.applications"
+        :items="applicationsList"
         title="Applications"
         item-key="id"
         :search-fields="['status', 'company', 'title']"

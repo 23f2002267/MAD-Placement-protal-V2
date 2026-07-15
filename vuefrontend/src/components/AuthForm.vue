@@ -26,7 +26,7 @@ function toggleMode() {
 
     <div class="mb-3">
       <label class="form-label">Email</label>
-      <input v-model="form.email" type="email" class="form-control" placeholder="admin@placeport.com" />
+      <input v-model="form.email" type="email" class="form-control" />
     </div>
 
     <div class="mb-3">

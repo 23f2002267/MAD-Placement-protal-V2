@@ -364,10 +364,14 @@ def get_company_applications():
             "student_email": student_user.email if student_user else "N/A",
             "branch_cgpa": student.branch_cgpa if student else {},
             "resume": student.resume if student else "",
+            "education": student.education if (student and student.education) else "",
+            "skills": student.skills if (student and student.skills) else "",
+            "experience": student.experience if (student and student.experience) else "",
             "status": app.status,
             "feedback": app.feedback or "",
             "interview_time": app.interview_time or "",
             "interview_link": app.interview_link or "",
+            "offer_letter_link": app.offer_letter_link or "",
             "date_applied": app.date_applied.isoformat() if app.date_applied else None
         })
     return jsonify(result)
@@ -381,6 +385,7 @@ def update_application_status(app_id):
     feedback = data.get('feedback', '')
     interview_time = data.get('interview_time', '')
     interview_link = data.get('interview_link', '')
+    offer_letter_link = data.get('offer_letter_link', '')
     if new_status not in ['Applied', 'Shortlisted', 'Selected', 'Rejected']:
         return jsonify({"error": "Invalid status"}), 400
         
@@ -404,10 +409,17 @@ def update_application_status(app_id):
             app_record.interview_time = interview_time
         if interview_link is not None:
             app_record.interview_link = interview_link
-    else:
-        # Clear interview details if status is changed to Selected or Rejected
+        app_record.offer_letter_link = None
+    elif new_status == 'Selected':
+        if offer_letter_link is not None:
+            app_record.offer_letter_link = offer_letter_link
         app_record.interview_time = None
         app_record.interview_link = None
+    else:
+        # Clear details if status is changed to other
+        app_record.interview_time = None
+        app_record.interview_link = None
+        app_record.offer_letter_link = None
         
     db.session.commit()
     cache.clear()
@@ -466,6 +478,54 @@ def update_drive_status_route(id):
     return jsonify({"message": f"Placement drive status updated to {new_status}"})
 
 # STUDENT ENDPOINTS
+@app.route('/api/student/profile', methods=['GET'])
+@auth_required('session', 'token')
+@roles_accepted('Student')
+def get_student_profile():
+    student = StudentProfile.query.filter_by(user_id=current_user.id).first()
+    if not student:
+        return jsonify({"error": "Profile not found"}), 404
+    return jsonify({
+        "id": student.id,
+        "name": student.name,
+        "branch_cgpa": student.branch_cgpa or {},
+        "resume": student.resume or "",
+        "education": student.education or "",
+        "skills": student.skills or "",
+        "experience": student.experience or ""
+    })
+
+@app.route('/api/student/profile', methods=['POST'])
+@auth_required('session', 'token')
+@roles_accepted('Student')
+def update_student_profile():
+    data = request.json
+    student = StudentProfile.query.filter_by(user_id=current_user.id).first()
+    if not student:
+        return jsonify({"error": "Profile not found"}), 404
+    
+    student.name = data.get('name', student.name)
+    student.branch_cgpa = data.get('branch_cgpa', student.branch_cgpa)
+    student.resume = data.get('resume', student.resume or "")
+    student.education = data.get('education', student.education or "")
+    student.skills = data.get('skills', student.skills or "")
+    student.experience = data.get('experience', student.experience or "")
+    
+    db.session.commit()
+    cache.clear()
+    return jsonify({
+        "message": "Profile updated successfully",
+        "student": {
+            "id": student.id,
+            "name": student.name,
+            "branch_cgpa": student.branch_cgpa or {},
+            "resume": student.resume or "",
+            "education": student.education or "",
+            "skills": student.skills or "",
+            "experience": student.experience or ""
+        }
+    })
+
 @app.route('/api/student/drives')
 @auth_required('session', 'token')
 @roles_accepted('Student')
@@ -505,6 +565,7 @@ def get_student_applications():
             "feedback": app.feedback or "",
             "interview_time": app.interview_time or "",
             "interview_link": app.interview_link or "",
+            "offer_letter_link": app.offer_letter_link or "",
             "date_applied": app.date_applied.isoformat() if app.date_applied else None
         })
     return jsonify(result)

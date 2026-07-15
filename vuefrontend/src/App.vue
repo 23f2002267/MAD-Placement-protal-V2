@@ -17,6 +17,9 @@ const adminDrives = ref([]);
 const adminApplications = ref([]);
 const allDrives = ref([]);
 const companyDrives = ref([]);
+const companyProfile = ref({ id: 0, name: '', website: '', status: 'Pending' });
+const companyApplications = ref([]);
+const studentApplications = ref([]);
 const currentBtn = ref('Dashboard')
 
 function toggleAuthMode() {
@@ -43,65 +46,124 @@ async function handleAuth(form) {
   }
 }
 
+async function apiFetch(url, options = {}) {
+  const headers = options.headers || {};
+  if (user.value?.token) {
+    headers['Authentication-Token'] = user.value.token;
+  }
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers
+    }
+  });
+}
+
 async function fetchDashboardData() {
   if (role.value === 'Admin') {
-    const s = await fetch('/api/admin/stats');
+    const s = await apiFetch('/api/admin/stats');
     stats.value = await s.json();
     console.log(stats.value)
-    const c = await fetch('/api/admin/pending-companies');
+    const c = await apiFetch('/api/admin/pending-companies');
     pendingCompanies.value = await c.json();
-    const d = await fetch('/api/admin/pending-drives');
+    const d = await apiFetch('/api/admin/pending-drives');
     pendingDrives.value = await d.json();
-    const u = await fetch('/api/admin/search');
+    const u = await apiFetch('/api/admin/search');
     adminUser.value = await u.json();
-    const k = await fetch('/api/admin/drive');
+    const k = await apiFetch('/api/admin/drive');
     adminDrives.value = await k.json();
-    const j = await fetch('/api/admin/application');
+    const j = await apiFetch('/api/admin/application');
     adminApplications.value = await j.json();
   } else if (role.value === 'Student') {
-    const d = await fetch('/api/student/drives');
+    const d = await apiFetch('/api/student/drives');
     allDrives.value = await d.json();
+    const a = await apiFetch('/api/student/applications');
+    if (a.ok) {
+      studentApplications.value = await a.json();
+    }
   } else if (role.value === 'Company') {
-    const d = await fetch(`/api/company/drives/${user.value?.id}`);
+    const d = await apiFetch(`/api/company/drives/${user.value?.id}`);
     companyDrives.value = await d.json();
+    const p = await apiFetch('/api/company/profile');
+    if (p.ok) {
+      companyProfile.value = await p.json();
+    }
+    const a = await apiFetch('/api/company/applications');
+    if (a.ok) {
+      companyApplications.value = await a.json();
+    }
+  }
+}
+
+async function updateApplicationStatus({ appId, status, feedback, interview_time, interview_link }) {
+  const res = await apiFetch(`/api/company/applications/${appId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status, feedback, interview_time, interview_link })
+  });
+  const data = await res.json();
+  alert(data.message || 'Status updated successfully');
+  await fetchDashboardData();
+}
+
+async function updateDriveStatus({ driveId, status }) {
+  const res = await apiFetch(`/api/company/drives/${driveId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status })
+  });
+  const data = await res.json();
+  alert(data.message || 'Drive status updated successfully');
+  await fetchDashboardData();
+}
+
+async function saveCompanyProfile(profileData) {
+  const res = await apiFetch('/api/company/profile', {
+    method: 'POST',
+    body: JSON.stringify(profileData)
+  });
+  const data = await res.json();
+  alert(data.message || 'Profile updated successfully');
+  if (res.ok) {
+    companyProfile.value = data.company;
+    await fetchDashboardData();
   }
 }
 
 
 async function approveCompany(id) {
-  await fetch(`/api/admin/approve-company/${id}`, { method: 'POST' });
+  await apiFetch(`/api/admin/approve-company/${id}`, { method: 'POST' });
   await fetchDashboardData();
 }
 
 async function approveDrive(id) {
-  await fetch(`/api/admin/approve-drive/${id}`, { method: 'POST' });
+  await apiFetch(`/api/admin/approve-drive/${id}`, { method: 'POST' });
   await fetchDashboardData();
 }
 async function rejectCompany(id) {
-  await fetch(`/api/admin/reject-company/${id}`, { method: 'POST' });
+  await apiFetch(`/api/admin/reject-company/${id}`, { method: 'POST' });
   await fetchDashboardData();
 }
 async function rejectDrive(id) {
-  await fetch(`/api/admin/reject-drive/${id}`, { method: 'POST' });
+  await apiFetch(`/api/admin/reject-drive/${id}`, { method: 'POST' });
   await fetchDashboardData();
 }
 async function blacklistUser(id) {
-  await fetch(`/api/admin/blacklist-user/${id}`, { method: 'POST' });
+  await apiFetch(`/api/admin/blacklist-user/${id}`, { method: 'POST' });
   await fetchDashboardData();
 }
 async function deleteUser(id) {
   const conf = window.confirm("Delete User id ?")
   if (conf) {
-    const res = await fetch(`/api/admin/delete-user/${id}`, { method: 'POST' });
+    const res = await apiFetch(`/api/admin/delete-user/${id}`, { method: 'POST' });
+    const resData = await res.json();
     await fetchDashboardData();
-    alert(res.message)
+    alert(resData.message)
   }
 }
 
 async function saveDrive(newDrive) {
-  const res = await fetch('/api/company/create-drive', {
+  const res = await apiFetch('/api/company/create-drive', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newDrive)
   });
   const data = await res.json();
@@ -111,9 +173,8 @@ async function saveDrive(newDrive) {
   }
 
 async function applyDrive(id) {
-  const res = await fetch('/api/student/apply', {
+  const res = await apiFetch('/api/student/apply', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: user.value?.id, drive_id: id })
   });
   const data = await res.json();
@@ -125,7 +186,7 @@ function logout() {
   user.value = null;
   role.value = '';
   localStorage.clear();
-  fetch('/api/logout', { method: 'POST' });
+  apiFetch('/api/logout', { method: 'POST' });
 }
 
 function viewDetails(item) {
@@ -172,14 +233,19 @@ onMounted(() => {
       </div>
 
       <div v-else-if="role === 'Student'">
-        <StudentDashboard :drives="allDrives" @apply-drive="applyDrive" />
+        <StudentDashboard :drives="allDrives" :applications="studentApplications" @apply-drive="applyDrive" />
       </div>
 
       <div v-else-if="role === 'Company'">
         <CompanyDashboard 
         :user="user"
         :drives="companyDrives"
+        :profile="companyProfile"
+        :applications="companyApplications"
         @save-drive="saveDrive"
+        @update-profile="saveCompanyProfile"
+        @update-application-status="updateApplicationStatus"
+        @update-drive-status="updateDriveStatus"
         />
       </div>
     </div>

@@ -64,6 +64,9 @@ class Application(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('student_profile.id', ondelete='SET NULL'))
     date_applied = db.Column(db.DateTime, server_default=text('CURRENT_TIMESTAMP'))
     status = db.Column(db.String(20), CheckConstraint("status IN ('Applied', 'Shortlisted', 'Selected', 'Rejected')"), default='Applied')
+    feedback = db.Column(db.Text, nullable=True)
+    interview_time = db.Column(db.String(255), nullable=True)
+    interview_link = db.Column(db.String(255), nullable=True)
     drive = db.relationship('PlacementDrive', back_populates='applications')
 
     __table_args__ = (

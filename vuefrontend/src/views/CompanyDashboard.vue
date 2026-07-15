@@ -97,6 +97,11 @@ function toggleDriveStatus(driveId, currentStatus) {
     emit('update-drive-status', { driveId, status: newStatus });
   }
 }
+
+const selectedCandidate = ref(null);
+function selectCandidate(app) {
+  selectedCandidate.value = app;
+}
 </script>
 
 <template>
@@ -286,7 +291,9 @@ function toggleDriveStatus(driveId, currentStatus) {
                     <template v-for="app in props.applications.slice(0, 5)" :key="app.id">
                       <tr>
                         <td class="border-0">
-                          <div class="fw-semibold text-dark">{{ app.student_name }}</div>
+                          <button @click="selectCandidate(app)" data-bs-toggle="modal" data-bs-target="#candidateProfileModal" class="btn btn-link text-start p-0 fw-semibold text-dark text-decoration-none hover-underline">
+                            {{ app.student_name }} 🔍
+                          </button>
                           <div class="text-muted small">{{ app.student_email }}</div>
                         </td>
                         <td class="border-0 fw-semibold text-secondary">{{ app.drive_title }}</td>
@@ -438,7 +445,9 @@ function toggleDriveStatus(driveId, currentStatus) {
               <tbody>
                 <tr v-for="app in pendingApps" :key="app.id">
                   <td class="border-0">
-                    <div class="fw-bold text-dark">{{ app.student_name }}</div>
+                    <button @click="selectCandidate(app)" data-bs-toggle="modal" data-bs-target="#candidateProfileModal" class="btn btn-link text-start p-0 fw-bold text-dark text-decoration-none hover-underline">
+                      {{ app.student_name }} 🔍
+                    </button>
                     <div class="text-muted small">{{ app.student_email }}</div>
                   </td>
                   <td class="border-0 fw-semibold text-secondary">{{ app.drive_title }}</td>
@@ -503,7 +512,9 @@ function toggleDriveStatus(driveId, currentStatus) {
               <tbody>
                 <tr v-for="app in shortlistedApps" :key="app.id">
                   <td class="border-0">
-                    <div class="fw-bold text-dark">{{ app.student_name }}</div>
+                    <button @click="selectCandidate(app)" data-bs-toggle="modal" data-bs-target="#candidateProfileModal" class="btn btn-link text-start p-0 fw-bold text-dark text-decoration-none hover-underline">
+                      {{ app.student_name }} 🔍
+                    </button>
                     <div class="text-muted small mb-1">{{ app.student_email }}</div>
                     
                     <!-- Scheduled Interview Info Block -->
@@ -709,6 +720,119 @@ function toggleDriveStatus(driveId, currentStatus) {
         <div class="modal-footer border-0 pt-0">
           <button type="button" class="btn btn-light rounded-3 fw-semibold px-4" data-bs-toggle="modal" data-bs-target="#driveModal">Cancel</button>
           <button class="btn btn-primary rounded-3 fw-semibold px-4" @click="$emit('save-drive', newDrive)" data-bs-dismiss="modal">Submit for Approval</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Candidate Profile Modal -->
+  <div class="modal fade" id="candidateProfileModal" tabindex="-1" aria-labelledby="candidateProfileModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow rounded-4">
+        <div class="modal-header border-0 bg-light p-4 rounded-top-4">
+          <div class="d-flex align-items-center gap-3">
+            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold fs-4" style="width: 50px; height: 50px;">
+              {{ (selectedCandidate?.student_name || 'S')[0].toUpperCase() }}
+            </div>
+            <div>
+              <h5 class="modal-title fw-bold text-dark mb-1" id="candidateProfileModalLabel">{{ selectedCandidate?.student_name }}</h5>
+              <span class="text-muted small">{{ selectedCandidate?.student_email }}</span>
+            </div>
+          </div>
+          <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4" v-if="selectedCandidate">
+          
+          <!-- Basic Placement Info -->
+          <div class="p-3 bg-light rounded-4 mb-4">
+            <div class="row g-2 align-items-center">
+              <div class="col-sm-6">
+                <span class="text-muted small d-block text-uppercase fw-semibold">Applied Position</span>
+                <strong class="text-dark">{{ selectedCandidate.drive_title }}</strong>
+              </div>
+              <div class="col-sm-6 text-sm-end">
+                <span class="text-muted small d-block text-uppercase fw-semibold mb-1">Application Status</span>
+                <span class="badge px-3 py-2 rounded-pill fw-semibold" :class="{
+                  'bg-warning text-dark': selectedCandidate.status === 'Applied',
+                  'bg-info text-white': selectedCandidate.status === 'Shortlisted',
+                  'bg-success text-white': selectedCandidate.status === 'Selected',
+                  'bg-danger text-white': selectedCandidate.status === 'Rejected'
+                }">
+                  {{ selectedCandidate.status }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Academic & Resume -->
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <div class="card border p-3 rounded-3 h-100 bg-white">
+                <span class="text-muted small text-uppercase fw-bold d-block mb-1">Academic CGPA</span>
+                <div v-if="selectedCandidate.branch_cgpa && Object.keys(selectedCandidate.branch_cgpa).length">
+                  <div v-for="(cgpa, branch) in selectedCandidate.branch_cgpa" :key="branch" class="fw-bold fs-5 text-primary">
+                    {{ branch }}: <span class="text-dark">{{ cgpa }} CGPA</span>
+                  </div>
+                </div>
+                <div v-else class="text-muted small">Not provided</div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card border p-3 rounded-3 h-100 bg-white d-flex flex-column justify-content-between">
+                <div>
+                  <span class="text-muted small text-uppercase fw-bold d-block mb-1">Verified Resume</span>
+                  <p class="text-muted small mb-2">Review candidate's official verification resume file.</p>
+                </div>
+                <a v-if="selectedCandidate.resume" :href="selectedCandidate.resume" target="_blank" class="btn btn-primary btn-sm rounded-3 w-100 py-2">
+                  📄 Open Candidate Resume
+                </a>
+                <span v-else class="text-muted small text-center py-2 bg-light rounded-3">No Resume uploaded</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Skills Section -->
+          <div class="mb-4">
+            <h6 class="fw-bold text-dark border-bottom pb-2">Technical Skills & Expertise</h6>
+            <div v-if="selectedCandidate.skills" class="d-flex flex-wrap gap-1.5 mt-2">
+              <span v-for="skill in selectedCandidate.skills.split(',')" :key="skill" class="badge bg-secondary-subtle text-secondary-emphasis px-2.5 py-1.5 rounded-pill small">
+                {{ skill.trim() }}
+              </span>
+            </div>
+            <p v-else class="text-muted small">No specific skills listed.</p>
+          </div>
+
+          <!-- Education History -->
+          <div class="mb-4">
+            <h6 class="fw-bold text-dark border-bottom pb-2">Education Details</h6>
+            <p v-if="selectedCandidate.education" class="text-dark small style-pre-wrap mb-0" style="white-space: pre-wrap;">{{ selectedCandidate.education }}</p>
+            <p v-else class="text-muted small mb-0">No education details specified.</p>
+          </div>
+
+          <!-- Professional Experience -->
+          <div class="mb-4">
+            <h6 class="fw-bold text-dark border-bottom pb-2">Projects & Experience</h6>
+            <p v-if="selectedCandidate.experience" class="text-dark small style-pre-wrap mb-0" style="white-space: pre-wrap;">{{ selectedCandidate.experience }}</p>
+            <p v-else class="text-muted small mb-0">No professional experience specified.</p>
+          </div>
+
+          <!-- Feedback & Interview Details -->
+          <div class="p-3 bg-warning-subtle rounded-3" v-if="selectedCandidate.feedback || selectedCandidate.interview_time">
+            <h6 class="fw-bold text-warning-emphasis mb-2">Process Updates & Feedback</h6>
+            <p class="small mb-1.5" v-if="selectedCandidate.feedback">
+              💬 <strong>Feedback Note:</strong> <span class="fst-italic text-dark">"{{ selectedCandidate.feedback }}"</span>
+            </p>
+            <p class="small mb-1.5" v-if="selectedCandidate.interview_time">
+              🕒 <strong>Interview Scheduled:</strong> <span class="text-dark">{{ selectedCandidate.interview_time }}</span>
+            </p>
+            <p class="small mb-0" v-if="selectedCandidate.interview_link">
+              🔗 <strong>Meeting Link:</strong> <a :href="selectedCandidate.interview_link" target="_blank" class="text-decoration-underline fw-bold">{{ selectedCandidate.interview_link }}</a>
+            </p>
+          </div>
+
+        </div>
+        <div class="modal-footer border-0 p-4 pt-0">
+          <button type="button" class="btn btn-secondary px-4 rounded-3" data-bs-dismiss="modal">Close Profile</button>
         </div>
       </div>
     </div>

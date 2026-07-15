@@ -259,6 +259,7 @@ onMounted(() => {
 
       <div v-else-if="role === 'Admin'">
         <AdminDashboard
+          :user="user"
           :current-btn="currentBtn"
           :stats="stats"
           :pending-companies="pendingCompanies"

@@ -36,6 +36,26 @@ db.init_app(app)
 CORS(app)
 cache = Cache(app)
 
+def make_student_drives_key():
+    from flask_security import current_user
+    return f"student_drives_{current_user.id if (current_user and current_user.is_authenticated) else 'anon'}"
+
+def make_student_applications_key():
+    from flask_security import current_user
+    return f"student_applications_{current_user.id if (current_user and current_user.is_authenticated) else 'anon'}"
+
+def make_student_profile_key():
+    from flask_security import current_user
+    return f"student_profile_{current_user.id if (current_user and current_user.is_authenticated) else 'anon'}"
+
+def make_company_profile_key():
+    from flask_security import current_user
+    return f"company_profile_{current_user.id if (current_user and current_user.is_authenticated) else 'anon'}"
+
+def make_company_applications_key():
+    from flask_security import current_user
+    return f"company_applications_{current_user.id if (current_user and current_user.is_authenticated) else 'anon'}"
+
 app.config.update(
     CELERY=dict(
         broker_url="redis://localhost:6379/1",
@@ -123,6 +143,7 @@ def register():
 # SEARCH FUNCTIONALITY
 
 @app.route('/api/search')
+@cache.cached(timeout=300, query_string=True)
 def search():
     q = request.args.get('query', '')
     if not q:
@@ -139,11 +160,51 @@ def search():
     return jsonify(results)
 
 
+@app.route('/api/company/search')
+@auth_required('session', 'token')
+@cache.cached(timeout=300, query_string=True)
+def company_search():
+    q = request.args.get('query', '')
+    query = CompanyProfile.query.filter_by(status='Approved')
+    if q:
+        query = query.filter(CompanyProfile.name.ilike(f'%{q}%') | CompanyProfile.website.ilike(f'%{q}%'))
+    entries = query.all()
+    return jsonify([{"id": c.id, "name": c.name, "website": c.website or "", "status": c.status} for c in entries])
+
+
+@app.route('/api/student/search')
+@auth_required('session', 'token')
+@roles_accepted('Admin', 'Company')
+@cache.cached(timeout=300, query_string=True)
+def student_search():
+    q = request.args.get('query', '')
+    query = StudentProfile.query
+    if q:
+        query = query.filter(StudentProfile.name.ilike(f'%{q}%') | StudentProfile.skills.ilike(f'%{q}%') | StudentProfile.education.ilike(f'%{q}%'))
+    entries = query.all()
+    
+    result = []
+    for s in entries:
+        student_user = s.user
+        result.append({
+            "id": s.id,
+            "user_id": s.user_id,
+            "name": s.name,
+            "email": student_user.email if student_user else "N/A",
+            "branch_cgpa": s.branch_cgpa or {},
+            "resume": s.resume or "",
+            "education": s.education or "",
+            "skills": s.skills or "",
+            "experience": s.experience or ""
+        })
+    return jsonify(result)
+
+
 # ADMIN ENDPOINTS
 @app.route('/api/admin/stats')
 @auth_required('session', 'token')
 @roles_accepted('Admin')
-@cache.cached(timeout=60) # Caching Requirement
+@cache.cached(timeout=300) # Caching Requirement
 def get_stats():
     return jsonify({
         "students": StudentProfile.query.count(),
@@ -155,7 +216,7 @@ def get_stats():
 @app.route('/api/admin/search')
 @auth_required('session', 'token')
 @roles_accepted('Admin')
-@cache.cached(timeout=60) # Caching Requirement
+@cache.cached(timeout=300) # Caching Requirement
 def get_users():
     entries = User.query.all()
     return jsonify([{"id": s.id, "username": s.username, "email":s.email,
@@ -164,7 +225,7 @@ def get_users():
 @app.route('/api/admin/drive')
 @auth_required('session', 'token')
 @roles_accepted('Admin')
-@cache.cached(timeout=60) # Caching Requirement
+@cache.cached(timeout=300) # Caching Requirement
 def get_drive():
     pd_entries = PlacementDrive.query.all()
     return jsonify([{
@@ -184,15 +245,35 @@ def get_drive():
 @app.route('/api/admin/application')
 @auth_required('session', 'token')
 @roles_accepted('Admin')
-@cache.cached(timeout=60) # Caching Requirement
+@cache.cached(timeout=300) # Caching Requirement
 def get_applications():
     ap_entries = Application.query.all()
-    return jsonify([{
-        "id": d.id,
-        "drive_id": d.drive_id,
-        "student_id": d.student_id,
-        "date_applied": d.date_applied,
-        "status": d.status } for d in ap_entries])
+    result = []
+    for d in ap_entries:
+        student = d.student
+        student_user = student.user if student else None
+        drive = d.drive
+        result.append({
+            "id": d.id,
+            "drive_id": d.drive_id,
+            "drive_title": drive.title if drive else "Unknown",
+            "company_name": drive.company_profile.name if (drive and drive.company_profile) else "Unknown",
+            "student_id": d.student_id,
+            "student_name": student.name if student else "Unknown",
+            "student_email": student_user.email if student_user else "N/A",
+            "branch_cgpa": student.branch_cgpa if student else {},
+            "resume": student.resume if student else "",
+            "education": student.education if (student and student.education) else "",
+            "skills": student.skills if (student and student.skills) else "",
+            "experience": student.experience if (student and student.experience) else "",
+            "status": d.status,
+            "feedback": d.feedback or "",
+            "interview_time": d.interview_time or "",
+            "interview_link": d.interview_link or "",
+            "offer_letter_link": d.offer_letter_link or "",
+            "date_applied": d.date_applied.isoformat() if d.date_applied else None
+        })
+    return jsonify(result)
 
 
 @app.route('/api/admin/pending-companies')
@@ -288,6 +369,7 @@ def delete_company(id):
 @app.route('/api/company/profile', methods=['GET'])
 @auth_required('session', 'token')
 @roles_accepted('Company')
+@cache.cached(timeout=300, make_cache_key=make_company_profile_key)
 def get_company_profile():
     company = CompanyProfile.query.filter_by(user_id=current_user.id).first()
     if not company:
@@ -329,6 +411,7 @@ def update_company_profile():
 @app.route('/api/company/drives/<int:id>', methods=['GET'])
 @auth_required('session', 'token')
 @roles_accepted('Company')
+@cache.cached(timeout=300)
 def Drives(id):
     entry = CompanyProfile.query.filter_by(user_id=id).first()
     entries = entry.placement_drives
@@ -342,6 +425,7 @@ def Drives(id):
 @app.route('/api/company/applications', methods=['GET'])
 @auth_required('session', 'token')
 @roles_accepted('Company')
+@cache.cached(timeout=300, make_cache_key=make_company_applications_key)
 def get_company_applications():
     company = CompanyProfile.query.filter_by(user_id=current_user.id).first()
     if not company:
@@ -477,10 +561,32 @@ def update_drive_status_route(id):
     cache.clear()
     return jsonify({"message": f"Placement drive status updated to {new_status}"})
 
+@app.route('/api/student/profile/user/<int:user_id>', methods=['GET'])
+@auth_required('session', 'token')
+@roles_accepted('Admin', 'Company', 'Student')
+@cache.cached(timeout=300)
+def get_student_profile_by_user_id(user_id):
+    student = StudentProfile.query.filter_by(user_id=user_id).first()
+    if not student:
+        return jsonify({"error": "Profile not found"}), 404
+    student_user = student.user
+    return jsonify({
+        "id": student.id,
+        "user_id": student.user_id,
+        "name": student.name,
+        "email": student_user.email if student_user else "N/A",
+        "branch_cgpa": student.branch_cgpa or {},
+        "resume": student.resume or "",
+        "education": student.education or "",
+        "skills": student.skills or "",
+        "experience": student.experience or ""
+    })
+
 # STUDENT ENDPOINTS
 @app.route('/api/student/profile', methods=['GET'])
 @auth_required('session', 'token')
 @roles_accepted('Student')
+@cache.cached(timeout=300, make_cache_key=make_student_profile_key)
 def get_student_profile():
     student = StudentProfile.query.filter_by(user_id=current_user.id).first()
     if not student:
@@ -529,6 +635,7 @@ def update_student_profile():
 @app.route('/api/student/drives')
 @auth_required('session', 'token')
 @roles_accepted('Student')
+@cache.cached(timeout=300, make_cache_key=make_student_drives_key)
 def get_student_drives():
     student = StudentProfile.query.filter_by(user_id=current_user.id).first()
     applied_drive_ids = set()
@@ -547,6 +654,7 @@ def get_student_drives():
 @app.route('/api/student/applications', methods=['GET'])
 @auth_required('session', 'token')
 @roles_accepted('Student')
+@cache.cached(timeout=300, make_cache_key=make_student_applications_key)
 def get_student_applications():
     student = StudentProfile.query.filter_by(user_id=current_user.id).first()
     if not student:

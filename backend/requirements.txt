@@ -1,0 +1,10 @@
+flask
+flask-sqlalchemy
+flask-login
+werkzeug
+flask_security
+flask_caching
+celery
+redis
+flask_cors
+argon2-cffi

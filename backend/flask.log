@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/mnt/d/AL P'/mad2/backend/app.py", line 1, in <module>
+    from flask import Flask, render_template, jsonify, request, send_from_directory
+ModuleNotFoundError: No module named 'flask'
